@@ -1,3 +1,5 @@
+const API_URL = "https://hungry-news-notice.loca.lt";
+
 async function submitPrintJob() {
   // Grab your existing form inputs by their IDs
   const fileInput = document.getElementById('fileInput'); // Your file input ID
@@ -24,7 +26,7 @@ async function submitPrintJob() {
     };
 
     try {
-      const res = await fetch('http://127.0.0.1:5000/api/jobs', {
+      const res = await fetch(`${API_URL}/api/jobs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
