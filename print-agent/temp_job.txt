@@ -1,0 +1,4 @@
+--- AUTO PRINT TEST ---
+Job ID: job_1787199155963
+Copies: 1
+Color Mode: Black & White

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Printing Service</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 25px; background-color: #eef2f5; }
+        .app-container { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        .card { padding: 25px; border-radius: 10px; background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h2 { margin-top: 0; color: #2c3e50; font-size: 20px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; color: #4a5568; }
+        input[type="file"], input[type="number"], select, input[type="range"] { 
+            width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; 
+        }
+        .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .range-label { display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; color: #4a5568; }
+        button { background: #28a745; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; font-weight: bold; margin-top: 10px; }
+        button:hover { background: #218838; }
+        
+        /* Interactive A4 Sheet Canvas Styles */
+        .preview-card { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .a4-wrapper { 
+            position: relative; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2); 
+            border: 1px solid #cbd5e0; 
+            border-radius: 3px; 
+            background: #ffffff; 
+            cursor: grab;
+        }
+        .a4-wrapper:active { cursor: grabbing; }
+        /* Display canvas scaled to A4 visual proportions (Ratio 1 : 1.414) */
+        canvas#a4Canvas { width: 230px; height: 325px; display: block; background: #ffffff; }
+        .sheet-label { font-size: 12px; font-weight: bold; color: #718096; margin-top: 12px; text-align: center; }
+
+        #status { margin-top: 15px; padding: 10px; border-radius: 6px; display: none; font-weight: 600; font-size: 13px; width: 100%; box-sizing: border-box; }
+        .info { background: #e2e3e5; color: #383d41; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Left Column: Controls & Adjustments -->
+    <div class="card">
+        <h2>Upload & Page Setup</h2>
+        
+        <form id="printForm" onsubmit="return false;">
+            <div class="form-group">
+                <label for="fileInput">Select Image File:</label>
+                <input type="file" id="fileInput" accept="image/*" />
+            </div>
+
+            <!-- Resizing & Moving Controls -->
+            <div class="form-group">
+                <div class="range-label"><span>Image Size / Zoom:</span><span id="scaleVal">80%</span></div>
+                <input type="range" id="scaleInput" min="10" max="100" value="80" disabled />
+            </div>
+
+            <div class="form-group">
+                <div class="range-label"><span>Horizontal Position (X):</span></div>
+                <input type="range" id="posXInput" min="0" max="100" value="50" disabled />
+            </div>
+
+            <div class="form-group">
+                <div class="range-label"><span>Vertical Position (Y):</span></div>
+                <input type="range" id="posYInput" min="0" max="100" value="50" disabled />
+            </div>
+
+            <div class="form-group setup-grid">
+                <div>
+                    <label for="copiesInput">Copies:</label>
+                    <input type="number" id="copiesInput" value="1" min="1" max="100" />
+                </div>
+                <div>
+                    <label for="colorInput">Print Mode:</label>
+                    <select id="colorInput">
+                        <option value="bw">Black & White</option>
+                        <option value="color">Color</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="button" id="payBtn">Confirm & Pay via UPI</button>
+        </form>
+
+        <div id="status"></div>
+    </div>
+
+    <!-- Right Column: Interactive A4 Canvas Preview -->
+    <div class="card preview-card">
+        <h2>A4 Canvas Live Preview</h2>
+        <div class="a4-wrapper">
+            <!-- High-Res A4 Print Canvas (1240 x 1754 px @ 150 DPI) -->
+            <canvas id="a4Canvas" width="1240" height="1754"></canvas>
+        </div>
+        <div class="sheet-label">Drag image or use sliders to move & scale</div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const fileInput = document.getElementById('fileInput');
+    const scaleInput = document.getElementById('scaleInput');
+    const posXInput = document.getElementById('posXInput');
+    const posYInput = document.getElementById('posYInput');
+    const scaleVal = document.getElementById('scaleVal');
+    const copiesInput = document.getElementById('copiesInput');
+    const colorInput = document.getElementById('colorInput');
+    const payBtn = document.getElementById('payBtn');
+    const statusDiv = document.getElementById('status');
+
+    const canvas = document.getElementById('a4Canvas');
+    const ctx = canvas.getContext('2d');
+
+    let loadedImg = null;
+    let isDragging = false;
+    let startX, startY;
+
+    // Draw initial empty A4 Sheet
+    function clearSheet() {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#a0aec0";
+        ctx.font = "bold 40px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillText("No Image Uploaded", canvas.width / 2, canvas.height / 2);
+    }
+    clearSheet();
+
+    // Render image according to position & scale controls
+    function redrawCanvas() {
+        if (!loadedImg) return;
+
+        // Clear canvas with white paper background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const scalePercent = parseInt(scaleInput.value) / 100;
+        
+        // Calculate max printable dimensions on canvas
+        const imgAspect = loadedImg.width / loadedImg.height;
+        let drawWidth = canvas.width * scalePercent;
+        let drawHeight = drawWidth / imgAspect;
+
+        if (drawHeight > canvas.height * scalePercent) {
+            drawHeight = canvas.height * scalePercent;
+            drawWidth = drawHeight * imgAspect;
+        }
+
+        // Calculate Position X & Y from sliders (0% to 100%)
+        const posXPercent = parseInt(posXInput.value) / 100;
+        const posYPercent = parseInt(posYInput.value) / 100;
+
+        const x = (canvas.width - drawWidth) * posXPercent;
+        const y = (canvas.height - drawHeight) * posYPercent;
+
+        ctx.drawImage(loadedImg, x, y, drawWidth, drawHeight);
+    }
+
+    // Load Image File
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                loadedImg = new Image();
+                loadedImg.onload = () => {
+                    scaleInput.disabled = false;
+                    posXInput.disabled = false;
+                    posYInput.disabled = false;
+                    redrawCanvas();
+                };
+                loadedImg.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    // Control Listeners
+    scaleInput.addEventListener('input', () => {
+        scaleVal.innerText = `${scaleInput.value}%`;
+        redrawCanvas();
+    });
+    posXInput.addEventListener('input', redrawCanvas);
+    posYInput.addEventListener('input', redrawCanvas);
+
+    // Mouse Dragging inside A4 Preview
+    canvas.addEventListener('mousedown', (e) => {
+        if (!loadedImg) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        // Update range inputs based on drag delta
+        posXInput.value = Math.min(100, Math.max(0, parseInt(posXInput.value) + (dx / 2)));
+        posYInput.value = Math.min(100, Math.max(0, parseInt(posYInput.value) + (dy / 2)));
+
+        startX = e.clientX;
+        startY = e.clientY;
+        redrawCanvas();
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    function showStatus(text, type) {
+        statusDiv.style.display = 'block';
+        statusDiv.className = type;
+        statusDiv.innerText = text;
+    }
+
+    // Submit Processed A4 Canvas
+    payBtn.addEventListener('click', async () => {
+        if (!loadedImg) {
+            alert("Please select an image file first!");
+            return;
+        }
+
+        showStatus("Exporting customized A4 sheet...", "info");
+
+        // Convert the rendered A4 canvas into high-res JPEG
+        const canvasDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+        const payload = {
+            fileName: `custom_print_${Date.now()}.jpg`,
+            fileData: canvasDataUrl,
+            copies: parseInt(copiesInput.value) || 1,
+            isColor: colorInput.value === 'color',
+            pageSize: 'A4'
+        };
+
+        showStatus("Sending file to print queue...", "info");
+
+        try {
+            const res = await fetch('http://127.0.0.1:5000/api/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                showStatus("Success! Customized sheet sent to EPSON printer.", "success");
+            } else {
+                showStatus(`Server error: Status ${res.status}`, "error");
+            }
+        } catch (err) {
+            showStatus("Cannot reach server. Ensure 'node server.js' is running!", "error");
+        }
+    });
+});
+</script>
+
+</body>
+</html>
