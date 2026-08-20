@@ -1,10 +1,9 @@
-const API_URL = "https://hungry-news-notice.loca.lt";
+const API_URL = "https://cornball-marshy-refusal.ngrok-free.dev";
 
 async function submitPrintJob() {
-  // Grab your existing form inputs by their IDs
-  const fileInput = document.getElementById('fileInput'); // Your file input ID
-  const copiesInput = document.getElementById('copiesInput'); // Your copies input ID (optional)
-  const colorInput = document.getElementById('colorInput'); // Your color checkbox/select (optional)
+  const fileInput = document.getElementById('fileInput');
+  const copiesInput = document.getElementById('copiesInput');
+  const colorInput = document.getElementById('colorInput');
 
   if (!fileInput || !fileInput.files[0]) {
     alert("Please select a file to print!");
@@ -17,7 +16,6 @@ async function submitPrintJob() {
   reader.onload = async function (e) {
     const base64Data = e.target.result;
 
-    // Collect settings from your original page setup
     const payload = {
       fileName: file.name,
       fileData: base64Data,
@@ -28,7 +26,10 @@ async function submitPrintJob() {
     try {
       const res = await fetch(`${API_URL}/api/jobs`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true'
+        },
         body: JSON.stringify(payload)
       });
 
